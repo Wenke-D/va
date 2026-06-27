@@ -1,0 +1,8 @@
+# Rust build output
+/target
+
+# Distribution binaries built by hand (see README)
+/dist
+
+# macOS
+.DS_Store

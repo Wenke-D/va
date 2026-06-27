@@ -1,0 +1,14 @@
+{
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "entity.name.function.recipe.vafile",
+        "settings": { "fontStyle": "bold" }
+      },
+      {
+        "scope": "punctuation.separator.namespace.vafile",
+        "settings": { "foreground": "#2f81f7" }
+      }
+    ]
+  }
+}

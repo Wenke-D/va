@@ -1,0 +1,10 @@
+[package]
+name = "va"
+version = "0.0.0"
+edition = "2021"
+description = "A disciplined command runner: runs named goals defined in a vafile."
+license = "MIT"
+
+[[bin]]
+name = "va"
+path = "src/main.rs"

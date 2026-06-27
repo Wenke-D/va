@@ -1,0 +1,57 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "vafile",
+  "scopeName": "source.vafile",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#recipe-header" },
+    { "include": "#interpolation" },
+    { "include": "#variable" }
+  ],
+  "repository": {
+    "comment": {
+      "comment": "A full-line comment (only at column 0, per the vafile grammar).",
+      "match": "^#.*$",
+      "name": "comment.line.number-sign.vafile"
+    },
+    "recipe-header": {
+      "comment": "NAME [params...] : [deps...]  at column 0.",
+      "match": "^([A-Za-z0-9_-]+(?:::[A-Za-z0-9_-]+)*)((?:[ \\t]+[A-Za-z0-9_]+\\??)*)[ \\t]*(:)(.*)$",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.recipe.vafile",
+          "patterns": [
+            { "match": "::", "name": "punctuation.separator.namespace.vafile" }
+          ]
+        },
+        "2": {
+          "patterns": [
+            { "match": "\\?", "name": "keyword.operator.optional.vafile" },
+            { "match": "[A-Za-z0-9_]+", "name": "variable.parameter.vafile" }
+          ]
+        },
+        "3": { "name": "punctuation.separator.recipe.vafile" },
+        "4": {
+          "patterns": [
+            { "match": "::", "name": "punctuation.separator.namespace.vafile" },
+            { "match": "[A-Za-z0-9_-]+", "name": "entity.name.function.dependency.vafile" }
+          ]
+        }
+      }
+    },
+    "interpolation": {
+      "comment": "{{ name }} parameter substitution in a recipe body.",
+      "match": "(\\{\\{)[ \\t]*([A-Za-z0-9_]+)[ \\t]*(\\}\\})",
+      "captures": {
+        "1": { "name": "punctuation.section.interpolation.begin.vafile" },
+        "2": { "name": "variable.other.interpolation.vafile" },
+        "3": { "name": "punctuation.section.interpolation.end.vafile" }
+      }
+    },
+    "variable": {
+      "comment": "Shell-style $name / ${name} references in a recipe body.",
+      "match": "(\\$)(\\{)?([A-Za-z_][A-Za-z0-9_]*)(\\})?",
+      "name": "variable.other.vafile"
+    }
+  }
+}

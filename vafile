@@ -1,0 +1,22 @@
+# configure the CMake build tree
+configure:
+    echo "[configure] cmake -S . -B build"
+
+# compile what's already configured
+compile:
+    echo "[compile] cmake --build build"
+
+# the everyday goal: configure, then compile (deps run first, in order)
+build: configure compile
+
+# build is also a namespace: `va build release` for an optimized build
+build::release:
+    echo "[build::release] cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build"
+
+# a goal with a parameter
+test name:
+    echo "[test] ctest --test-dir build -R {{name}}"
+
+# wipe the whole build tree
+clean:
+    echo "[clean] rm -rf build"

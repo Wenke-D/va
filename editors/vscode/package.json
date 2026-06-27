@@ -1,0 +1,41 @@
+{
+  "name": "vafile",
+  "displayName": "vafile syntax",
+  "description": "Syntax highlighting for va's vafile command-runner format.",
+  "version": "0.0.1",
+  "publisher": "va",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "vafile",
+        "aliases": [
+          "vafile",
+          "Vafile"
+        ],
+        "filenames": [
+          "vafile"
+        ],
+        "filenamePatterns": [
+          "*vafile"
+        ],
+        "extensions": [
+          ".vafile"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vafile",
+        "scopeName": "source.vafile",
+        "path": "./syntaxes/vafile.tmLanguage.json"
+      }
+    ]
+  }
+}
