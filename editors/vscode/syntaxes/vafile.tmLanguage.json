@@ -4,6 +4,7 @@
   "scopeName": "source.vafile",
   "patterns": [
     { "include": "#comment" },
+    { "include": "#import-directive" },
     { "include": "#recipe-header" },
     { "include": "#interpolation" },
     { "include": "#variable" }
@@ -13,6 +14,21 @@
       "comment": "A full-line comment (only at column 0, per the vafile grammar).",
       "match": "^#.*$",
       "name": "comment.line.number-sign.vafile"
+    },
+    "import-directive": {
+      "comment": "import \"path\" [as namespace]  at column 0.",
+      "match": "^(import)[ \\t]+(\"[^\"]*\")(?:[ \\t]+(as)[ \\t]+([A-Za-z0-9_-]+(?:::[A-Za-z0-9_-]+)*))?[ \\t]*$",
+      "captures": {
+        "1": { "name": "keyword.control.import.vafile" },
+        "2": { "name": "string.quoted.double.vafile" },
+        "3": { "name": "keyword.control.import.vafile" },
+        "4": {
+          "name": "entity.name.namespace.vafile",
+          "patterns": [
+            { "match": "::", "name": "punctuation.separator.namespace.vafile" }
+          ]
+        }
+      }
     },
     "recipe-header": {
       "comment": "NAME [params...] : [deps...]  at column 0.",

@@ -36,6 +36,22 @@ pub struct Recipe {
     pub body: Vec<String>,
     /// Source line number of the header (1-based), for error messages.
     pub line: usize,
+    /// Label of the file this recipe was parsed from (for error messages).
+    /// The pure parser doesn't know filenames; the loader stamps the real path
+    /// when merging imports. Defaults to "vafile" for a standalone parse.
+    pub source: String,
+}
+
+/// An `import "path" [as namespace]` directive, recorded by the parser and
+/// resolved later by the loader (which does the filesystem reads and merge).
+#[derive(Debug, Clone)]
+pub struct Import {
+    /// The quoted path, verbatim. Resolved relative to the importing file.
+    pub path: String,
+    /// `as <ns>` target namespace, if any. `None` means a flat merge.
+    pub alias: Option<Vec<String>>,
+    /// Source line of the directive (1-based), for error messages.
+    pub line: usize,
 }
 
 impl Recipe {
@@ -57,11 +73,14 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-/// The parsed model: an ordered collection of recipes keyed by their path.
+/// The parsed model: an ordered collection of recipes keyed by their path,
+/// plus any `import` directives the loader still needs to resolve.
 #[derive(Debug, Default)]
 pub struct Vafile {
     /// path (joined by "::") -> Recipe
     pub recipes: BTreeMap<String, Recipe>,
+    /// `import` directives in declaration order. Empty in a fully-merged Vafile.
+    pub imports: Vec<Import>,
 }
 
 impl Vafile {
@@ -126,6 +145,73 @@ fn parse_name_path(name: &str, lineno: usize) -> Result<Vec<String>, ParseError>
         }
     }
     Ok(path)
+}
+
+/// True if a column-0 line is an `import` directive rather than a recipe header.
+///
+/// The test is deliberately narrow: the line must be the bare word `import`
+/// followed by whitespace and then a quote. This keeps a recipe legitimately
+/// *named* `import` (written `import:`) from being misread as a directive.
+fn looks_like_import(line: &str) -> bool {
+    match line.trim().strip_prefix("import") {
+        Some(rest) if rest.starts_with(|c: char| c.is_whitespace()) => {
+            rest.trim_start().starts_with('"')
+        }
+        _ => false,
+    }
+}
+
+/// Parse an `import "path" [as namespace]` directive.
+fn parse_import(line: &str, lineno: usize) -> Result<Import, ParseError> {
+    let err = |message: String| ParseError { line: lineno, message };
+
+    // Strip the leading `import` keyword (presence guaranteed by the caller).
+    let rest = line.trim()["import".len()..].trim_start();
+    let after_open = rest
+        .strip_prefix('"')
+        .ok_or_else(|| err("import expects a quoted path".to_string()))?;
+    let close = after_open
+        .find('"')
+        .ok_or_else(|| err("unterminated string in import directive".to_string()))?;
+
+    let path = after_open[..close].to_string();
+    if path.is_empty() {
+        return Err(err("import path is empty".to_string()));
+    }
+
+    // Anything after the closing quote must be exactly `as <namespace>`.
+    let tail = after_open[close + 1..].trim();
+    let alias = if tail.is_empty() {
+        None
+    } else {
+        let mut toks = tail.split_whitespace();
+        match toks.next() {
+            Some("as") => {
+                let ns = toks
+                    .next()
+                    .ok_or_else(|| err("`as` requires a namespace name".to_string()))?;
+                if toks.next().is_some() {
+                    return Err(err(format!(
+                        "unexpected text after import namespace `{}`",
+                        ns
+                    )));
+                }
+                Some(parse_name_path(ns, lineno)?)
+            }
+            _ => {
+                return Err(err(format!(
+                    "expected `as <namespace>` after import path, found `{}`",
+                    tail
+                )))
+            }
+        }
+    };
+
+    Ok(Import {
+        path,
+        alias,
+        line: lineno,
+    })
 }
 
 /// Parse a recipe header `NAME params... : deps...` into (path, params, deps).
@@ -247,6 +333,13 @@ pub fn parse(src: &str) -> Result<Vafile, ParseError> {
             });
         }
 
+        // An `import "path" [as ns]` directive (a top-level line, no body).
+        if looks_like_import(raw) {
+            vafile.imports.push(parse_import(raw, lineno)?);
+            i += 1;
+            continue;
+        }
+
         let (path, params, deps) = parse_header(raw, lineno)?;
 
         // Collect the body: subsequent lines indented > 0, until a non-indented
@@ -306,6 +399,7 @@ pub fn parse(src: &str) -> Result<Vafile, ParseError> {
                 deps,
                 body,
                 line: lineno,
+                source: "vafile".to_string(),
             },
         );
 

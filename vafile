@@ -1,3 +1,15 @@
+import "va/help.va"
+
+import "va/help2.va" as help2
+
+# the project's own local test pipeline: `va ci test`, `va ci build`, ...
+import "va/ci.va" as ci
+
+# `va ci` runs the whole pipeline (test, then release build); `va ci test` and
+# friends still work as subcommands. This bare `ci` goal lives in the root
+# because everything in the imported va/ci.va is prefixed `ci::`.
+ci: ci::test ci::build
+
 # configure the CMake build tree
 configure:
     echo "[configure] cmake -S . -B build"
@@ -20,3 +32,14 @@ test name:
 # wipe the whole build tree
 clean:
     echo "[clean] rm -rf build"
+
+# build the optimized binary and install it as /usr/local/bin/va
+install:
+    cargo build --release
+    dest=/usr/local/bin/va
+    if cp target/release/va "$dest" 2>/dev/null; then
+        echo "installed -> $dest"
+    else
+        echo "writing $dest needs elevated permissions..."
+        sudo install -m 755 target/release/va "$dest" && echo "installed -> $dest"
+    fi

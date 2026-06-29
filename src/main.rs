@@ -4,6 +4,7 @@
 //! current directory), parses it, and resolves/executes the requested goal.
 
 mod executor;
+mod loader;
 mod parser;
 mod resolver;
 mod validate;
@@ -51,18 +52,11 @@ fn main() {
         exit(2);
     }
 
-    let src = match std::fs::read_to_string(vafile_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("va: cannot read vafile: {}", e);
-            exit(2);
-        }
-    };
-
-    let vafile = match parser::parse(&src) {
+    // Read the root vafile and resolve its imports into one merged model.
+    let vafile = match loader::load(vafile_path) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("va: parse error: {}", e);
+            eprintln!("va: {}", e);
             exit(2);
         }
     };

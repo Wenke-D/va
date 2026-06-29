@@ -19,12 +19,14 @@ use std::collections::HashSet;
 pub enum ValidateError {
     /// A dependency names a goal that does not exist.
     UnknownDependency {
+        source: String,
         line: usize,
         recipe: String,
         dep: String,
     },
     /// A dependency target has required parameters, which deps cannot supply.
     DependencyNeedsArgs {
+        source: String,
         line: usize,
         recipe: String,
         dep: String,
@@ -32,52 +34,66 @@ pub enum ValidateError {
     },
     /// A dependency points at a namespace with no default goal (not runnable).
     DependencyIsNamespace {
+        source: String,
         line: usize,
         recipe: String,
         dep: String,
         available: Vec<String>,
     },
     /// The dependency graph contains a cycle; `path` is the offending loop.
-    /// `line` points at the header of the first goal in the reported loop.
-    Cycle { line: usize, path: Vec<String> },
+    /// `line`/`source` point at the header of the first goal in the loop.
+    Cycle {
+        source: String,
+        line: usize,
+        path: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for ValidateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ValidateError::UnknownDependency { line, recipe, dep } => write!(
+            ValidateError::UnknownDependency {
+                source,
+                line,
+                recipe,
+                dep,
+            } => write!(
                 f,
-                "vafile:{}: `{}` depends on `{}`, which is not a defined goal",
-                line, recipe, dep
+                "{}:{}: `{}` depends on `{}`, which is not a defined goal",
+                source, line, recipe, dep
             ),
             ValidateError::DependencyNeedsArgs {
+                source,
                 line,
                 recipe,
                 dep,
                 required,
             } => write!(
                 f,
-                "vafile:{}: `{}` depends on `{}`, which requires argument(s) {}; dependencies cannot pass arguments",
+                "{}:{}: `{}` depends on `{}`, which requires argument(s) {}; dependencies cannot pass arguments",
+                source,
                 line,
                 recipe,
                 dep,
                 required.join(", ")
             ),
             ValidateError::DependencyIsNamespace {
+                source,
                 line,
                 recipe,
                 dep,
                 available,
             } => write!(
                 f,
-                "vafile:{}: `{}` depends on `{}`, which is a namespace, not a runnable goal (subcommands: {})",
+                "{}:{}: `{}` depends on `{}`, which is a namespace, not a runnable goal (subcommands: {})",
+                source,
                 line,
                 recipe,
                 dep,
                 available.join(", ")
             ),
-            ValidateError::Cycle { line, path } => {
-                write!(f, "vafile:{}: dependency cycle: {}", line, path.join(" -> "))
+            ValidateError::Cycle { source, line, path } => {
+                write!(f, "{}:{}: dependency cycle: {}", source, line, path.join(" -> "))
             }
         }
     }
@@ -91,6 +107,7 @@ pub fn validate(vafile: &Vafile) -> Result<(), Vec<ValidateError>> {
     for recipe in vafile.recipes.values() {
         let from = recipe.display_name();
         let line = recipe.line;
+        let source = recipe.source.clone();
         for dep in &recipe.deps {
             let dep_name = dep.join("::");
             match vafile.get(dep) {
@@ -103,6 +120,7 @@ pub fn validate(vafile: &Vafile) -> Result<(), Vec<ValidateError>> {
                         .collect();
                     if !required.is_empty() {
                         errors.push(ValidateError::DependencyNeedsArgs {
+                            source: source.clone(),
                             line,
                             recipe: from.clone(),
                             dep: dep_name,
@@ -112,6 +130,7 @@ pub fn validate(vafile: &Vafile) -> Result<(), Vec<ValidateError>> {
                 }
                 None if vafile.is_namespace(dep) => {
                     errors.push(ValidateError::DependencyIsNamespace {
+                        source: source.clone(),
                         line,
                         recipe: from.clone(),
                         dep: dep_name,
@@ -119,6 +138,7 @@ pub fn validate(vafile: &Vafile) -> Result<(), Vec<ValidateError>> {
                     });
                 }
                 None => errors.push(ValidateError::UnknownDependency {
+                    source: source.clone(),
                     line,
                     recipe: from.clone(),
                     dep: dep_name,
@@ -135,12 +155,10 @@ pub fn validate(vafile: &Vafile) -> Result<(), Vec<ValidateError>> {
     // Phase B: cycle detection over the now fully-resolved graph.
     if let Some(path) = find_cycle(vafile) {
         // Point at the header of the first goal in the loop.
-        let line = vafile
-            .recipes
-            .get(&path[0])
-            .map(|r| r.line)
-            .unwrap_or(0);
-        return Err(vec![ValidateError::Cycle { line, path }]);
+        let first = vafile.recipes.get(&path[0]);
+        let line = first.map(|r| r.line).unwrap_or(0);
+        let source = first.map(|r| r.source.clone()).unwrap_or_default();
+        return Err(vec![ValidateError::Cycle { source, line, path }]);
     }
 
     Ok(())

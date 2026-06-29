@@ -126,10 +126,65 @@ command line.
 A consequence: a token that matches a subcommand is always treated as part of
 the path, so it can never be mistaken for an argument.
 
+## Imports
+
+A vafile can pull goals in from other files with `import`, so shared recipes
+live in one place and projects compose them. The path is **quoted** and resolved
+**relative to the importing file's directory**:
+
+```
+import "ci/common.vafile"
+import "docker.vafile" as docker
+
+build: lint docker::build
+    echo "everything built"
+```
+
+There are two shapes:
+
+- **Flat** — `import "ci/common.vafile"` merges the imported goals under their
+  own names. A `lint:` over there becomes `va lint` here.
+- **Namespaced** — `import "docker.vafile" as docker` nests the *whole* file
+  under a namespace. Its `build:` becomes `va docker build` (and `docker::build`
+  when referenced as a dependency). The imported file's own internal
+  dependencies are rewritten to match, so it doesn't need to know it was
+  namespaced — the importer decides the layout.
+
+Once merged, imported goals are ordinary goals: you can depend on them
+(`build: lint docker::build`) and invoke them just like local ones.
+
+An `as` namespace can also be given an **action** — a default goal — by defining
+the bare name in the importing file. It runs on `va docker`, while the
+subcommands still work:
+
+```
+import "docker.vafile" as docker
+
+# `va docker` builds then pushes; `va docker build` / `va docker push` still work
+docker: docker::build docker::push
+```
+
+A few rules, in keeping with va's "checked up front" stance:
+
+- **Every name is unique.** If two files define the same final goal name it's a
+  hard error, reported before anything runs. Namespacing with `as` is how you
+  disambiguate.
+- **Imports are transitive.** An imported file may import in turn; an import
+  cycle is reported, not followed.
+- **The local file doesn't win.** There's no override — a clash is always an
+  error, whether between the root and an import or between two imports.
+- **An `as` namespace is sealed.** Exactly one import fills it. The importing
+  file may give it a default goal (the bare `docker:` above) but may not add new
+  sub-goals to it or override its members, and two imports can't share one
+  namespace. The contents of a namespace come from one place.
+
+> A line is read as an import only when it's the word `import` followed by a
+> quoted path (`import "x"`). That keeps a goal you legitimately *named* `import`
+> (written `import:`) from being mistaken for a directive.
+
 ---
 
-_Status: v0 prototype. Single-file vafiles only; cross-file imports are not yet
-supported._
+_Status: v0 prototype._
 
 ## The name
 

@@ -1,0 +1,26 @@
+# Local test pipeline for the va project itself.
+# Imported by the root vafile as `ci`. The root defines the bare `ci` goal,
+# so `va ci` runs the pipeline; `va ci test`, `va ci build`, ... run these.
+
+# run the unit + integration test suite
+test:
+    cargo test --locked
+
+# build the optimized binary (also the gate the release artifact comes from)
+build:
+    cargo build --release --locked
+
+# Note: the pipeline entry point is the bare `ci` goal in the ROOT vafile
+# (`ci: ci::test ci::build`), so `va ci` runs test-then-build. It can't live
+# here — every goal in this imported file is prefixed `ci::`, so this file
+# cannot define a bare `ci`.
+
+# --- advisory checks (the tree is hand-styled, so these currently fail) ---
+
+# check formatting without rewriting anything
+fmt:
+    cargo fmt --all -- --check
+
+# clippy lints, warnings treated as errors
+lint:
+    cargo clippy --locked --all-targets -- -D warnings
