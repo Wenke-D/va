@@ -12,6 +12,33 @@ project-local file full of named recipes — and owes both a great deal. `va`
 keeps that core idea and makes a few different choices around how goals are named
 and invoked (see [Subcommands](#subcommands)).
 
+## Install
+
+Download the binary for your platform from the latest release, make it
+executable, and drop it on your `PATH`:
+
+**Linux (x86_64)**
+
+```
+curl -L -o va https://github.com/Wenke-D/va/releases/latest/download/va-linux-x86_64
+chmod +x va && sudo mv va /usr/local/bin/
+```
+
+**macOS (Apple Silicon)**
+
+```
+curl -L -o va https://github.com/Wenke-D/va/releases/latest/download/va-macos-arm64
+chmod +x va && sudo mv va /usr/local/bin/
+```
+
+The Linux binary is statically linked (musl), so it runs on any distribution
+with nothing else to install. On macOS, Gatekeeper blocks unsigned downloads —
+clear the quarantine flag with `xattr -d com.apple.quarantine va` (or right-click
+→ Open the first time).
+
+Prefer to build it yourself? `cargo build --release` (or `va install`, which
+builds and installs to `/usr/local/bin`).
+
 ## Features
 
 - **Goals in a `vafile`.** Define a command once; run it as `va <goal>`.
@@ -181,6 +208,23 @@ A few rules, in keeping with va's "checked up front" stance:
 > A line is read as an import only when it's the word `import` followed by a
 > quoted path (`import "x"`). That keeps a goal you legitimately *named* `import`
 > (written `import:`) from being mistaken for a directive.
+
+## Releasing
+
+Releases are built by GitHub Actions
+([`.github/workflows/release.yml`](.github/workflows/release.yml)). Each target
+builds **natively on its own runner** — Linux x86_64 on Ubuntu, macOS Apple
+Silicon on a macOS runner — so there's no cross-compiling, Docker, or extra
+toolchain. To cut a release, bump the version in `Cargo.toml`, commit, then push
+a matching tag:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+CI builds both binaries and attaches them to the GitHub Release for the tag,
+which is what the [Install](#install) links point at.
 
 ---
 

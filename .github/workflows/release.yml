@@ -1,0 +1,47 @@
+name: release
+
+# Cut a release by pushing a version tag:
+#   git tag v0.1.0 && git push origin v0.1.0
+# Each target builds natively on its own runner (no cross-compiling), and the
+# binaries are attached to a GitHub Release for the tag.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # action-gh-release needs this to create/update the release
+
+jobs:
+  build:
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl   # static: runs on any distro
+            asset: va-linux-x86_64
+          - os: macos-14                        # Apple Silicon runner
+            target: aarch64-apple-darwin
+            asset: va-macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl linker
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Stage binary
+        run: cp target/${{ matrix.target }}/release/va ${{ matrix.asset }}
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset }}
