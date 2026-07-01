@@ -89,6 +89,29 @@ test name:
 va test MySuite     # runs: ctest --test-dir build -R MySuite
 ```
 
+### How a body runs
+
+A goal's body runs as a **single shell** (`sh`), so `cd` and variables persist
+from one line to the next:
+
+```
+build:
+    cd frontend
+    npm install         # runs inside ./frontend
+```
+
+The body is also **fail-fast**: it runs under `set -e`, so the first command
+that fails stops the goal — the same "stop on first failure" rule that applies
+to dependencies. To let a body keep going after a failure, start it with
+`set +e`, or ignore a single command with `cmd || true`:
+
+```
+check:
+    set +e              # this goal tolerates failures
+    diff a b
+    echo "compared"
+```
+
 ## Sequencing goals
 
 A goal can list other goals after its `:`. They run first, in the order given —
