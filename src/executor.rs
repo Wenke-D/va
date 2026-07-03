@@ -1,8 +1,9 @@
 //! Executor: runs a resolved recipe — its dependency closure first, then itself.
 //!
-//! The run order comes from `validate::plan` (deps-first, deduped, root last).
-//! Dependencies run with no arguments; only the invoked goal receives the args
-//! bound during resolution. Each recipe's body is one shell invocation, so `cd`
+//! The run order comes from `validate::plan` (deps-first, deduped, root last),
+//! which also binds each step's arguments: the invoked goal gets its CLI args,
+//! and a dependency gets the args its edge declared (with `{{param}}` forwarded
+//! from the declaring recipe). Each recipe's body is one shell invocation, so `cd`
 //! and variables persist across its lines (but not across recipes). Bodies run
 //! with `set -e`, so a body aborts on its first failing command; a goal opts out
 //! by starting with `set +e`. The first non-zero exit aborts the sequence. A
@@ -17,18 +18,13 @@ use crate::validate::plan;
 use std::process::Command;
 
 pub fn execute(vafile: &Vafile, resolved: &Resolved) -> i32 {
-    let order = plan(vafile, &resolved.recipe.path);
-    let no_args: Vec<(String, String)> = Vec::new();
+    // The plan threads arguments through the graph: the invoked goal gets its
+    // CLI args, and each dependency gets the args its edge declared.
+    let order = plan(vafile, &resolved.recipe.path, &resolved.args);
 
-    for path in &order {
-        let recipe = vafile.get(path).expect("planned recipe exists");
-        // Only the invoked goal gets arguments; dependencies take none.
-        let args = if path == &resolved.recipe.path {
-            &resolved.args
-        } else {
-            &no_args
-        };
-        let code = run_recipe(recipe, args);
+    for node in &order {
+        let recipe = vafile.get(&node.path).expect("planned recipe exists");
+        let code = run_recipe(recipe, &node.args);
         if code != 0 {
             return code;
         }

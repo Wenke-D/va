@@ -79,7 +79,10 @@ fn namespaced_import_prefixes_paths_and_internal_deps() {
 
     // The imported file's internal dep `build` was re-prefixed to `docker::build`,
     // so it still resolves within the merged model.
-    assert_eq!(release.deps, vec![path(&["docker", "build"])]);
+    assert_eq!(
+        release.deps,
+        vec![parser::Dep { path: path(&["docker", "build"]), args: vec![] }]
+    );
     assert!(validate::validate(&v).is_ok(), "namespaced deps resolve");
 }
 
@@ -135,7 +138,7 @@ fn parent_may_give_an_as_namespace_a_default_goal() {
     let sb = Sandbox::new();
     // A bare `ci` goal (path == the namespace) is allowed: it gives the
     // namespace an action without reaching inside it.
-    sb.write("vafile", "import \"sub.va\" as ci\nci: ci::test ci::build\n");
+    sb.write("vafile", "import \"sub.va\" as ci\nci: ci::test, ci::build\n");
     sb.write("sub.va", "test:\n    echo t\nbuild:\n    echo b\n");
 
     let v = loader::load(&sb.path("vafile")).expect("default goal is allowed");

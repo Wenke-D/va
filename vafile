@@ -8,7 +8,7 @@ import "va/ci.va" as ci
 # `va ci` runs the whole pipeline (test, then release build); `va ci test` and
 # friends still work as subcommands. This bare `ci` goal lives in the root
 # because everything in the imported va/ci.va is prefixed `ci::`.
-ci: ci::test ci::build
+ci: ci::test, ci::build
 
 # configure the CMake build tree
 configure:
@@ -19,7 +19,7 @@ compile:
     echo "[compile] cmake --build build"
 
 # the everyday goal: configure, then compile (deps run first, in order)
-build: configure compile
+build: configure, compile
 
 # build is also a namespace: `va build release` for an optimized build
 build::release:
@@ -28,6 +28,11 @@ build::release:
 # a goal with a parameter
 test name:
     echo "[test] ctest --test-dir build -R {{name}}"
+
+# a sequence that passes a fixed argument to a goal: `va smoke` runs `test`
+# with name=smoke first (comma-separated deps can carry positional args)
+smoke: test smoke
+    echo "[smoke] done"
 
 # wipe the whole build tree
 clean:

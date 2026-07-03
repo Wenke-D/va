@@ -22,16 +22,26 @@ pub struct Param {
     pub optional: bool,
 }
 
+/// A dependency edge: a goal to run first, with the positional arguments to pass
+/// it. `args` may contain `{{param}}` references to the *declaring* recipe's
+/// params (resolved when the plan is built); anything else is a literal value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dep {
+    pub path: Vec<String>,
+    pub args: Vec<String>,
+}
+
 /// A parsed recipe (a "goal").
 #[derive(Debug, Clone)]
 pub struct Recipe {
     /// Full dotted path, e.g. ["docker", "build"] for `docker::build`.
     pub path: Vec<String>,
     pub params: Vec<Param>,
-    /// Dependency goal references, in declaration order. Each is a path, e.g.
-    /// `build: configure docker::build` -> [["configure"], ["docker", "build"]].
-    /// Run (deduped, deps-first) before this recipe's body. They take no args.
-    pub deps: Vec<Vec<String>>,
+    /// Dependencies, in declaration order — comma-separated after the `:`, each
+    /// a goal reference plus optional args, e.g. `ci: test integration, lint` ->
+    /// [Dep{test, [integration]}, Dep{lint, []}]. Run (deduped, deps-first)
+    /// before this recipe's body.
+    pub deps: Vec<Dep>,
     /// Raw body lines (already de-indented), executed as a shell script.
     pub body: Vec<String>,
     /// Source line number of the header (1-based), for error messages.
@@ -125,6 +135,40 @@ impl Vafile {
 
 fn leading_spaces(s: &str) -> usize {
     s.chars().take_while(|c| *c == ' ' || *c == '\t').count()
+}
+
+/// Split a dependency segment into tokens on whitespace, honoring double quotes
+/// so an argument can contain spaces (`say "hello world"` -> ["say", "hello world"]).
+/// Quote characters are stripped; the first token is the goal, the rest are args.
+fn tokenize(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut started = false;
+    let mut in_quote = false;
+    for c in s.chars() {
+        if in_quote {
+            if c == '"' {
+                in_quote = false;
+            } else {
+                cur.push(c);
+            }
+        } else if c == '"' {
+            in_quote = true;
+            started = true;
+        } else if c.is_whitespace() {
+            if started {
+                out.push(std::mem::take(&mut cur));
+                started = false;
+            }
+        } else {
+            cur.push(c);
+            started = true;
+        }
+    }
+    if started {
+        out.push(cur);
+    }
+    out
 }
 
 /// Split a `name` (possibly with `::` separators) into validated path segments.
@@ -222,7 +266,7 @@ fn parse_import(line: &str, lineno: usize) -> Result<Import, ParseError> {
 fn parse_header(
     line: &str,
     lineno: usize,
-) -> Result<(Vec<String>, Vec<Param>, Vec<Vec<String>>), ParseError> {
+) -> Result<(Vec<String>, Vec<Param>, Vec<Dep>), ParseError> {
     let trimmed = line.trim();
     let bytes = trimmed.as_bytes();
     let mut sep = None;
@@ -295,16 +339,25 @@ fn parse_header(
         });
     }
 
-    // Deps (right of `:`). Each is a goal reference; they take no arguments.
+    // Deps (right of `:`) are comma-separated. Within one dep, whitespace splits
+    // the goal from its positional args, e.g. `test integration, lint`.
     let mut deps = Vec::new();
-    for tok in right.split_whitespace() {
-        if tok.contains('?') {
-            return Err(ParseError {
-                line: lineno,
-                message: format!("dependency `{}` cannot be optional", tok),
-            });
+    if !right.is_empty() {
+        for segment in right.split(',') {
+            let seg = segment.trim();
+            if seg.is_empty() {
+                return Err(ParseError {
+                    line: lineno,
+                    message: "empty dependency (stray or trailing comma?)".to_string(),
+                });
+            }
+            let mut tokens = tokenize(seg).into_iter();
+            // seg is non-empty, so there is at least the goal token.
+            let name = tokens.next().expect("non-empty dependency has a goal");
+            let path = parse_name_path(&name, lineno)?;
+            let args: Vec<String> = tokens.collect();
+            deps.push(Dep { path, args });
         }
-        deps.push(parse_name_path(tok, lineno)?);
     }
 
     Ok((path, params, deps))

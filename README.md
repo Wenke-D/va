@@ -114,7 +114,7 @@ check:
 
 ## Sequencing goals
 
-A goal can list other goals after its `:`. They run first, in the order given —
+A goal can list other goals to run first, **comma-separated**, after its `:` —
 so you can compose small goals into a larger one:
 
 ```
@@ -125,17 +125,42 @@ compile:
     cmake --build build
 
 # build has no body of its own; it just runs configure, then compile
-build: configure compile
+build: configure, compile
 ```
 
 ```
 va build            # runs configure, then compile
 ```
 
-Dependencies run **deps-first**, each **at most once per invocation** (a shared
-dependency isn't repeated), and the goal's own body runs last. The first failure
-stops the sequence. The dependency graph is checked before anything runs, so a
-cycle is a clear error rather than an infinite loop:
+### Passing arguments to a sequenced goal
+
+Because dependencies are comma-separated, one can carry its own positional
+arguments — written as whitespace after the goal name. So a sequence can invoke
+a parameterized goal with a value fixed right in the file:
+
+```
+test name:
+    ctest --test-dir build -R {{name}}
+
+# `va ci` runs `test smoke`, then `lint`
+ci: test smoke, lint
+```
+
+An argument may also be a `{{param}}` of the **declaring** goal, forwarding its
+own value down the chain (use `"quotes"` for a value with spaces):
+
+```
+# `va check integration` runs `test integration`, then echoes
+check suite: test {{suite}}
+    echo "checked {{suite}}"
+```
+
+Dependencies run **deps-first**, and the goal's own body runs last. The same goal
+with the **same** arguments runs **at most once** per invocation; the same goal
+with **different** arguments runs once for each — so `all: build x86, build arm`
+builds both. The first failure stops the sequence. Everything is checked before
+anything runs, so a wrong argument count or a cycle is a clear up-front error, not
+a mid-run surprise:
 
 ```
 va: dependency cycle: build -> compile -> build
@@ -170,7 +195,7 @@ This is the main place `va` differs from `just`. In `just` you can run several
 recipes at once — `just configure compile test`. In `va` an invocation always
 selects **exactly one** goal; the tokens after it are arguments or a subcommand
 path, never additional goals. Running things in sequence is expressed *in the
-vafile* as dependencies (`build: configure compile`), not assembled on the
+vafile* as dependencies (`build: configure, compile`), not assembled on the
 command line.
 
 A consequence: a token that matches a subcommand is always treated as part of
@@ -186,7 +211,7 @@ live in one place and projects compose them. The path is **quoted** and resolved
 import "ci/common.vafile"
 import "docker.vafile" as docker
 
-build: lint docker::build
+build: lint, docker::build
     echo "everything built"
 ```
 
@@ -201,7 +226,7 @@ There are two shapes:
   namespaced — the importer decides the layout.
 
 Once merged, imported goals are ordinary goals: you can depend on them
-(`build: lint docker::build`) and invoke them just like local ones.
+(`build: lint, docker::build`) and invoke them just like local ones.
 
 An `as` namespace can also be given an **action** — a default goal — by defining
 the bare name in the importing file. It runs on `va docker`, while the
@@ -211,7 +236,7 @@ subcommands still work:
 import "docker.vafile" as docker
 
 # `va docker` builds then pushes; `va docker build` / `va docker push` still work
-docker: docker::build docker::push
+docker: docker::build, docker::push
 ```
 
 A few rules, in keeping with va's "checked up front" stance:

@@ -208,7 +208,8 @@ fn apply_namespace(sub: &mut Vafile, ns: &[String]) {
     for (_, mut recipe) in old {
         recipe.path = prefixed(ns, &recipe.path);
         for dep in &mut recipe.deps {
-            *dep = prefixed(ns, dep);
+            // Only the target path is namespaced; args are values, not paths.
+            dep.path = prefixed(ns, &dep.path);
         }
         sub.recipes.insert(recipe.path.join("::"), recipe);
     }
